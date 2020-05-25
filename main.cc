@@ -7,7 +7,7 @@ static volatile uint8_t adc0;
 static volatile uint8_t adc1;
 
 void adc_setup() {
-  DIDR0 = ( 1 << ADC3D );
+  DIDR0 = ( 1 << ADC3D ) | ( 1 << ADC2D );
   ADMUX = (0<<REFS0) // vcc reference
     | (1<<ADLAR) // left-adjusted values
     | (1<<MUX1)
@@ -18,8 +18,8 @@ void adc_setup() {
     | (0<<ADATE) // auto trigger
     | (0<<ADIF)  // interrupt flag
     | (1<<ADIE)  // interrupt enable
-    | (1<<ADPS2) // prescale division by 32
-    | (0<<ADPS1)
+    | (1<<ADPS2) // prescale division by 128
+    | (1<<ADPS1)
     | (1<<ADPS0);
   sei();
 }
