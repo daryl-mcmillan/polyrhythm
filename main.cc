@@ -1,66 +1,35 @@
 #define FCPU 9600000UL
 #include <avr/io.h>
-#include <avr/interrupt.h>
-#include <util/delay.h>
 
-static volatile uint8_t adc0;
-static volatile uint8_t adc1;
-
-void adc_setup() {
-  DIDR0 = ( 1 << ADC3D ) | ( 1 << ADC2D );
+uint16_t adc_read(uint8_t mux) {
   ADMUX = (0<<REFS0) // vcc reference
     | (1<<ADLAR) // left-adjusted values
-    | (1<<MUX1)
-    | (1<<MUX0);
+    | (mux<<MUX0);
   ADCSRB = 0;
   ADCSRA = (1<<ADEN) // adc enable
     | (1<<ADSC)  // start conversion
     | (0<<ADATE) // auto trigger
     | (0<<ADIF)  // interrupt flag
     | (1<<ADIE)  // interrupt enable
-    | (1<<ADPS2) // prescale division by 128
-    | (1<<ADPS1)
+    | (1<<ADPS2) // prescale division by 32
+    | (0<<ADPS1)
     | (1<<ADPS0);
-  sei();
-}
-
-ISR(ADC_vect) {
-  if( ADMUX & (1<<MUX0) ) {
-    adc0 = ADC >> 8;
-  } else {
-    adc1 = ADC >> 8;
-  }
-  ADMUX ^= (1<<MUX0); // toggle ADC2/ADC3
-  ADCSRA |= (1<<ADSC);
+  while( ADCSRA & (1<<ADSC) ) { }
+  return ADC;
 }
 
 int main(void) {
 
+  DIDR0 = ( 1 << ADC3D ) | ( 1 << ADC2D );
   DDRB = 0b00000100;
   PORTB = 0b00000000;
-
-  adc_setup();
-
-  DIDR0 = ( 1 << ADC3D );
-  ADMUX = (0<<REFS0)
-    | (1<<ADLAR)
-    | (1<<MUX1)
-    | (1<<MUX0);
-  ADCSRB = 0;
-  ADCSRA = (1<<ADEN)
-    | (1<<ADSC)
-    | (1<<ADATE)
-    | (0<<ADIF)
-    | (1<<ADIE)
-    | (1<<ADPS2)
-    | (0<<ADPS1)
-    | (1<<ADPS0);
-  sei();
 
   uint8_t clock_pin = 0b00000001;
   uint8_t out_pin   = 0b00000100;
   uint8_t last = 0;
   uint8_t count = 0;
+  uint8_t clock_divider = 1;
+  uint8_t pulse_duration = 1;
   for( ;; ) {
     uint8_t sample = PINB;
     uint8_t changed = last ^ sample;
@@ -72,12 +41,14 @@ int main(void) {
         PORTB |= out_pin;
       }
       count ++;
+      clock_divider = (adc_read(3) >> 10) + 1;
+      pulse_duration = (adc_read(2) >> 10) + 1;
     }
     if( trailing_edge & clock_pin ) {
-      if( count >= (adc0>>2)+1 ) {
+      if( count >= clock_divider ) {
         PORTB &= ~out_pin;
 	count = 0;
-      } else if( count >= (adc1>>2)+1 ) {
+      } else if( count >= pulse_duration ) {
         PORTB &= ~out_pin;
       }
     }
